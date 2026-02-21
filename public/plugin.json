@@ -1,0 +1,31 @@
+{
+  "pluginName": "EPUB阅读器",
+  "description": "多看适配的EPUB电子书阅读器",
+  "main": "index.html",
+  "preload": "preload/services.js",
+  "logo": "logo.png",
+  "development": {
+    "main": "http://localhost:5173"
+  },
+  "features": [
+    {
+      "code": "bookshelf",
+      "explain": "打开书架",
+      "cmds": ["epub阅读器", "电子书", "阅读器", "bookshelf", "epub"]
+    },
+    {
+      "code": "open-epub",
+      "explain": "打开EPUB文件",
+      "cmds": [
+        {
+          "type": "files",
+          "label": "用EPUB阅读器打开",
+          "fileType": "file",
+          "match": "/\\.epub$/i",
+          "minNum": 1,
+          "maxNum": 1
+        }
+      ]
+    }
+  ]
+}
