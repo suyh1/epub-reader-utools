@@ -95,6 +95,45 @@ export class Paginator {
     return { ...this.layout }
   }
 
+  /**
+   * 获取当前章节内进度比例（0~1）
+   * 基于 scrollLeft / scrollWidth，不受窗口大小影响
+   */
+  getProgressRatio(): number {
+    if (!this.iframe?.contentDocument?.body) return 0
+    const body = this.iframe.contentDocument.body
+    const scrollWidth = body.scrollWidth
+    if (scrollWidth <= 0) return 0
+    const offset = this.state.currentPage * this.layout.scrollStep
+    return Math.min(1, offset / scrollWidth)
+  }
+
+  /**
+   * 根据章节内进度比例跳转到对应页
+   * 用于恢复阅读进度（不依赖页码，窗口大小变化后仍能定位到正确位置）
+   */
+  goToProgressRatio(ratio: number): void {
+    if (!this.iframe?.contentDocument?.body) return
+    if (ratio <= 0) {
+      this.goToFirstPage()
+      return
+    }
+    if (ratio >= 1) {
+      this.goToLastPage()
+      return
+    }
+
+    const body = this.iframe.contentDocument.body
+    const scrollWidth = body.scrollWidth
+    const targetOffset = ratio * scrollWidth
+
+    // 反算页码：targetOffset / scrollStep，然后对齐
+    const rawPage = Math.round(targetOffset / this.layout.scrollStep)
+    const page = Math.min(Math.max(0, rawPage), this.state.totalPages - 1)
+    this.state.currentPage = this.alignPage(page)
+    this.applyScroll()
+  }
+
   /** 重新计算页数（窗口大小变化时） */
   recalculate(): number {
     if (!this.iframe?.contentDocument?.body) return 1

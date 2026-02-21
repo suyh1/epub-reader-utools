@@ -3,11 +3,13 @@ import { ref, onUnmounted } from 'vue'
 import type { FootnoteData } from '@/core/duokan/FootnoteHandler'
 import type { ChapterBackground } from '@/core/renderer/ContentRenderer'
 import { useReaderStore } from '@/stores/reader'
+import { useBookshelfStore } from '@/stores/bookshelf'
 import { useEpub } from './useEpub'
 
 export function useReader() {
   const epub = useEpub()
   const readerStore = useReaderStore()
+  const bookshelfStore = useBookshelfStore()
 
   const iframeRef = ref<HTMLIFrameElement | null>(null)
   const containerRef = ref<HTMLDivElement | null>(null)
@@ -27,11 +29,20 @@ export function useReader() {
     const spineIndex = readerStore.pagination.spineIndex
     await goToChapter(spineIndex)
 
-    // 恢复页码
-    const savedPage = readerStore.pagination.currentPage
-    if (savedPage > 0) {
-      epub.paginator.goToPage(savedPage)
-      readerStore.updatePagination({ currentPage: savedPage })
+    // 恢复阅读位置：优先用 chapterProgress（比例），不受窗口大小影响
+    const savedProgress = bookshelfStore.getProgress(book.id)
+
+    if (savedProgress) {
+      const ratio = savedProgress.chapterProgress ?? 0
+      if (ratio > 0) {
+        epub.paginator.goToProgressRatio(ratio)
+      } else if (savedProgress.pageInChapter > 0) {
+        // 兼容旧数据：没有 chapterProgress 时回退到 pageInChapter
+        epub.paginator.goToPage(savedProgress.pageInChapter)
+      }
+      readerStore.updatePagination({
+        currentPage: epub.paginator.getState().currentPage,
+      })
     }
 
     // 定时保存进度
@@ -175,7 +186,8 @@ export function useReader() {
     navigating = true
 
     try {
-      const currentPage = readerStore.pagination.currentPage
+      // 先记住当前阅读位置（比例）
+      const ratio = epub.paginator.getProgressRatio()
       const iframeRect = iframeRef.value!.getBoundingClientRect()
 
       const result = epub.repaginate(
@@ -186,9 +198,12 @@ export function useReader() {
 
       if (result) {
         chapterBackground.value = result.background
-        const newPage = Math.min(currentPage, result.totalPages - 1)
-        epub.paginator.goToPage(newPage)
-        readerStore.updatePagination({ currentPage: newPage, totalPages: result.totalPages })
+        // 用比例恢复到正确位置
+        epub.paginator.goToProgressRatio(ratio)
+        readerStore.updatePagination({
+          currentPage: epub.paginator.getState().currentPage,
+          totalPages: result.totalPages,
+        })
       }
     } finally {
       navigating = false

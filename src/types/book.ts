@@ -19,8 +19,10 @@ export interface BookRecord {
 
 export interface ReadingProgress {
   spineIndex: number
-  /** 章节内页码（分页模式） */
+  /** 章节内页码（分页模式） — 仅作参考，恢复时以 chapterProgress 为准 */
   pageInChapter: number
+  /** 章节内进度比例 0~1（基于 scrollLeft / scrollWidth，不受窗口大小影响） */
+  chapterProgress: number
   /** 全书进度百分比 0-100 */
   percentage: number
   /** 最后阅读时间戳 */

@@ -72,6 +72,7 @@ export function useEpub() {
         progress: existingBook?.progress || {
           spineIndex: 0,
           pageInChapter: 0,
+          chapterProgress: 0,
           percentage: 0,
           timestamp: Date.now(),
         },
@@ -190,6 +191,7 @@ export function useEpub() {
     bookshelfStore.updateProgress(book.id, {
       spineIndex: state.spineIndex,
       pageInChapter: state.currentPage,
+      chapterProgress: _paginator.getProgressRatio(),
       percentage: readerStore.getOverallProgress(),
       timestamp: Date.now(),
     })
