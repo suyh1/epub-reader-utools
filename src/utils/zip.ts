@@ -3,9 +3,18 @@ import JSZip from 'jszip'
 
 export class ZipReader {
   private zip: JSZip | null = null
+  /** 小写路径 -> 实际路径 的索引（加载时一次性构建） */
+  private caseIndex: Map<string, string> = new Map()
 
   async load(data: ArrayBuffer): Promise<void> {
     this.zip = await JSZip.loadAsync(data)
+    // 构建大小写不敏感索引
+    this.caseIndex.clear()
+    this.zip.forEach((relativePath, file) => {
+      if (!file.dir) {
+        this.caseIndex.set(relativePath.toLowerCase(), relativePath)
+      }
+    })
   }
 
   /** 读取文本文件 */
@@ -28,32 +37,24 @@ export class ZipReader {
 
   /** 获取所有文件路径 */
   listFiles(): string[] {
-    if (!this.zip) throw new Error('ZIP not loaded')
-    const files: string[] = []
-    this.zip.forEach((relativePath, file) => {
-      if (!file.dir) files.push(relativePath)
-    })
-    return files
+    return Array.from(this.caseIndex.values())
   }
 
   /** 检查文件是否存在 */
   hasFile(path: string): boolean {
     if (!this.zip) return false
-    return this.zip.file(path) !== null
+    if (this.zip.file(path) !== null) return true
+    return this.caseIndex.has(path.toLowerCase())
   }
 
   private getFile(path: string): JSZip.JSZipObject {
     if (!this.zip) throw new Error('ZIP not loaded')
-    // 尝试精确匹配
+    // 精确匹配
     let file = this.zip.file(path)
     if (!file) {
-      // 尝试不区分大小写匹配
-      const normalizedPath = path.toLowerCase()
-      this.zip.forEach((relativePath, f) => {
-        if (relativePath.toLowerCase() === normalizedPath && !f.dir) {
-          file = f
-        }
-      })
+      // O(1) 大小写不敏感查找
+      const realPath = this.caseIndex.get(path.toLowerCase())
+      if (realPath) file = this.zip.file(realPath)
     }
     if (!file) throw new Error(`File not found in EPUB: ${path}`)
     return file
@@ -61,5 +62,6 @@ export class ZipReader {
 
   destroy(): void {
     this.zip = null
+    this.caseIndex.clear()
   }
 }

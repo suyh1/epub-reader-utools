@@ -1,9 +1,10 @@
 /** 阅读器状态管理 */
 import { defineStore } from 'pinia'
-import { ref, shallowRef } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted } from 'vue'
 import type { EpubBook, TocItem, ChapterContent } from '@/types/epub'
-import type { ReaderSettings } from '@/types/reader'
-import { DEFAULT_SETTINGS } from '@/types/reader'
+import type { ReaderSettings, ThemeKey } from '@/types/reader'
+import type { Bookmark } from '@/types/book'
+import { DEFAULT_SETTINGS, THEMES } from '@/types/reader'
 import type { PaginationState } from '@/core/pagination/Paginator'
 import { storage } from '@/utils/storage'
 
@@ -28,10 +29,62 @@ export const useReaderStore = defineStore('reader', () => {
   const showToc = ref(false)
   /** 是否显示设置面板 */
   const showSettings = ref(false)
+  /** 是否显示书签面板 */
+  const showBookmarks = ref(false)
+  /** 是否显示搜索面板 */
+  const showSearch = ref(false)
   /** 加载状态 */
   const loading = ref(false)
   /** 错误信息 */
   const error = ref<string | null>(null)
+  /** 当前书籍的书签列表 */
+  const bookmarks = ref<Bookmark[]>([])
+  /** 本次阅读开始时间 */
+  const sessionStartTime = ref(0)
+  /** 本次阅读已计时长（秒） */
+  const sessionDuration = ref(0)
+
+  /** 自动深色模式监听 */
+  let darkModeQuery: MediaQueryList | null = null
+  let darkModeHandler: ((e: MediaQueryListEvent) => void) | null = null
+  /** 自动深色模式切换前的主题 */
+  let themeBeforeAuto: ThemeKey | null = null
+
+  function setupAutoTheme(): void {
+    cleanupAutoTheme()
+    if (!settings.value.autoTheme) return
+
+    darkModeQuery = window.matchMedia('(prefers-color-scheme: dark)')
+    darkModeHandler = (e: MediaQueryListEvent) => {
+      if (!settings.value.autoTheme) return
+      applyAutoTheme(e.matches)
+    }
+    darkModeQuery.addEventListener('change', darkModeHandler)
+    applyAutoTheme(darkModeQuery.matches)
+  }
+
+  function applyAutoTheme(isDark: boolean): void {
+    if (isDark) {
+      if (settings.value.theme !== 'dark' && settings.value.theme !== 'ink' && settings.value.theme !== 'dusk') {
+        themeBeforeAuto = settings.value.theme
+        settings.value.theme = 'dark'
+      }
+    } else {
+      if (themeBeforeAuto && (settings.value.theme === 'dark' || settings.value.theme === 'ink' || settings.value.theme === 'dusk')) {
+        settings.value.theme = themeBeforeAuto
+        themeBeforeAuto = null
+      }
+    }
+  }
+
+  function cleanupAutoTheme(): void {
+    if (darkModeQuery && darkModeHandler) {
+      darkModeQuery.removeEventListener('change', darkModeHandler)
+    }
+    darkModeQuery = null
+    darkModeHandler = null
+    themeBeforeAuto = null
+  }
 
   /** 全书进度百分比 */
   function getOverallProgress(): number {
@@ -53,7 +106,6 @@ export const useReaderStore = defineStore('reader', () => {
     const spineItem = currentBook.value.spine[pagination.value.spineIndex]
     if (!spineItem) return ''
 
-    // 在目录中查找匹配的标题
     const title = findTocTitle(currentBook.value.toc, spineItem.href)
     return title || `第 ${pagination.value.spineIndex + 1} 章`
   }
@@ -69,6 +121,8 @@ export const useReaderStore = defineStore('reader', () => {
     if (!showToolbar.value) {
       showToc.value = false
       showSettings.value = false
+      showBookmarks.value = false
+      showSearch.value = false
     }
   }
 
@@ -76,6 +130,88 @@ export const useReaderStore = defineStore('reader', () => {
   function updateSettings(newSettings: Partial<ReaderSettings>): void {
     Object.assign(settings.value, newSettings)
     storage.set(SETTINGS_KEY, settings.value)
+    if ('autoTheme' in newSettings) {
+      setupAutoTheme()
+    }
+  }
+
+  // ---- 书签功能 ----
+
+  /** 加载书签 */
+  function loadBookmarks(bookId: string): void {
+    bookmarks.value = storage.get<Bookmark[]>(`bookmarks_${bookId}`, [])
+  }
+
+  /** 保存书签 */
+  function saveBookmarks(bookId: string): void {
+    storage.set(`bookmarks_${bookId}`, bookmarks.value)
+  }
+
+  /** 添加书签 */
+  function addBookmark(): Bookmark | null {
+    if (!currentBook.value) return null
+    const bookId = currentBook.value.id
+
+    // 检查是否已存在相同位置的书签
+    const exists = bookmarks.value.find(
+      b => b.spineIndex === pagination.value.spineIndex && b.pageInChapter === pagination.value.currentPage
+    )
+    if (exists) return exists
+
+    const bookmark: Bookmark = {
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      spineIndex: pagination.value.spineIndex,
+      pageInChapter: pagination.value.currentPage,
+      chapterTitle: getCurrentChapterTitle(),
+      createdAt: Date.now(),
+      percentage: getOverallProgress(),
+    }
+    bookmarks.value.unshift(bookmark)
+    saveBookmarks(bookId)
+    return bookmark
+  }
+
+  /** 移除书签 */
+  function removeBookmark(id: string): void {
+    if (!currentBook.value) return
+    const idx = bookmarks.value.findIndex(b => b.id === id)
+    if (idx >= 0) {
+      bookmarks.value.splice(idx, 1)
+      saveBookmarks(currentBook.value.id)
+    }
+  }
+
+  /** 当前页是否有书签 */
+  function isCurrentPageBookmarked(): boolean {
+    return bookmarks.value.some(
+      b => b.spineIndex === pagination.value.spineIndex && b.pageInChapter === pagination.value.currentPage
+    )
+  }
+
+  /** 切换当前页书签 */
+  function toggleBookmark(): boolean {
+    const existing = bookmarks.value.find(
+      b => b.spineIndex === pagination.value.spineIndex && b.pageInChapter === pagination.value.currentPage
+    )
+    if (existing) {
+      removeBookmark(existing.id)
+      return false
+    } else {
+      addBookmark()
+      return true
+    }
+  }
+
+  // ---- 阅读计时 ----
+
+  function startSession(): void {
+    sessionStartTime.value = Date.now()
+    sessionDuration.value = 0
+  }
+
+  function getSessionSeconds(): number {
+    if (sessionStartTime.value === 0) return 0
+    return Math.floor((Date.now() - sessionStartTime.value) / 1000)
   }
 
   /** 重置 */
@@ -86,8 +222,14 @@ export const useReaderStore = defineStore('reader', () => {
     showToolbar.value = false
     showToc.value = false
     showSettings.value = false
+    showBookmarks.value = false
+    showSearch.value = false
     loading.value = false
     error.value = null
+    bookmarks.value = []
+    sessionStartTime.value = 0
+    sessionDuration.value = 0
+    cleanupAutoTheme()
   }
 
   return {
@@ -98,13 +240,26 @@ export const useReaderStore = defineStore('reader', () => {
     showToolbar,
     showToc,
     showSettings,
+    showBookmarks,
+    showSearch,
     loading,
     error,
+    bookmarks,
+    sessionStartTime,
+    sessionDuration,
     getOverallProgress,
     getCurrentChapterTitle,
     updatePagination,
     toggleToolbar,
     updateSettings,
+    loadBookmarks,
+    addBookmark,
+    removeBookmark,
+    isCurrentPageBookmarked,
+    toggleBookmark,
+    startSession,
+    getSessionSeconds,
+    setupAutoTheme,
     reset,
   }
 })

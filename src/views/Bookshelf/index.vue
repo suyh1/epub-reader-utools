@@ -1,6 +1,6 @@
 <script lang="ts" setup>
 import { ref, computed } from 'vue'
-import { Search, Plus, BookOpen, ArrowDownUp } from 'lucide-vue-next'
+import { Search, Plus, BookOpen, ArrowDownUp, Tag, X } from 'lucide-vue-next'
 import { useBookshelfStore } from '@/stores/bookshelf'
 import type { BookRecord } from '@/types/book'
 import BookCard from './BookCard.vue'
@@ -15,6 +15,9 @@ bookshelfStore.loadBooks()
 
 const searchQuery = ref('')
 const isDragOver = ref(false)
+/** 标签管理弹窗 */
+const tagEditBookId = ref<string | null>(null)
+const newTagInput = ref('')
 
 const filteredBooks = computed(() => {
   const q = searchQuery.value.trim().toLowerCase()
@@ -67,6 +70,22 @@ function handleDelete(id: string): void {
   bookshelfStore.removeBook(id)
 }
 
+function openTagEditor(bookId: string, e: MouseEvent): void {
+  e.stopPropagation()
+  tagEditBookId.value = bookId
+  newTagInput.value = ''
+}
+
+function addTagToBook(): void {
+  if (!tagEditBookId.value || !newTagInput.value.trim()) return
+  bookshelfStore.addTag(tagEditBookId.value, newTagInput.value)
+  newTagInput.value = ''
+}
+
+function getBookTags(bookId: string): string[] {
+  return bookshelfStore.getBook(bookId)?.tags || []
+}
+
 const sortLabels: Record<string, string> = {
   lastRead: '最近阅读',
   title: '书名',
@@ -117,6 +136,25 @@ function cycleSortBy(): void {
       </div>
     </header>
 
+    <!-- 标签筛选栏 -->
+    <div v-if="bookshelfStore.allTags.length > 0" class="tag-filter-bar">
+      <button
+        class="tag-chip"
+        :class="{ active: !bookshelfStore.filterTag }"
+        @click="bookshelfStore.filterTag = ''"
+      >全部</button>
+      <button
+        v-for="tag in bookshelfStore.allTags"
+        :key="tag"
+        class="tag-chip"
+        :class="{ active: bookshelfStore.filterTag === tag }"
+        @click="bookshelfStore.filterTag = bookshelfStore.filterTag === tag ? '' : tag"
+      >
+        <Tag :size="11" />
+        {{ tag }}
+      </button>
+    </div>
+
     <!-- 拖拽提示 -->
     <transition name="fade">
       <div v-if="isDragOver" class="drop-overlay">
@@ -135,6 +173,7 @@ function cycleSortBy(): void {
         :book="book"
         @click="emit('open-book', book)"
         @delete="handleDelete(book.id)"
+        @tag="openTagEditor(book.id, $event)"
       />
     </div>
 
@@ -150,6 +189,36 @@ function cycleSortBy(): void {
         <span>导入 EPUB</span>
       </button>
     </div>
+    <!-- 标签编辑弹窗 -->
+    <transition name="fade">
+      <div v-if="tagEditBookId" class="tag-overlay" @click.self="tagEditBookId = null">
+        <div class="tag-dialog" role="dialog" aria-label="编辑标签">
+          <div class="tag-dialog-title">编辑标签</div>
+          <div class="tag-list">
+            <span
+              v-for="tag in getBookTags(tagEditBookId)"
+              :key="tag"
+              class="tag-item"
+            >
+              {{ tag }}
+              <button class="tag-remove" @click="bookshelfStore.removeTag(tagEditBookId!, tag)" aria-label="移除标签">
+                <X :size="12" />
+              </button>
+            </span>
+            <span v-if="getBookTags(tagEditBookId).length === 0" class="tag-empty">暂无标签</span>
+          </div>
+          <div class="tag-add-row">
+            <input
+              v-model="newTagInput"
+              class="tag-add-input"
+              placeholder="输入标签名..."
+              @keydown.enter="addTagToBook"
+            />
+            <button class="tag-add-btn" @click="addTagToBook">添加</button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
@@ -294,6 +363,146 @@ function cycleSortBy(): void {
   color: var(--primary);
   font-size: 16px;
   font-weight: 500;
+}
+
+/* 标签筛选栏 */
+.tag-filter-bar {
+  display: flex;
+  gap: 8px;
+  padding: 10px 28px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  -webkit-overflow-scrolling: touch;
+
+  &::-webkit-scrollbar { display: none; }
+}
+
+.tag-chip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: all var(--duration-fast);
+  flex-shrink: 0;
+
+  &:hover {
+    border-color: var(--border-hover);
+    color: var(--text-primary);
+  }
+
+  &.active {
+    background: var(--primary);
+    color: var(--text-inverse);
+    border-color: var(--primary);
+  }
+}
+
+/* 标签编辑弹窗 */
+.tag-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tag-dialog {
+  width: 320px;
+  max-width: 85%;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-xl);
+}
+
+.tag-dialog-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+  min-height: 28px;
+}
+
+.tag-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: var(--primary-light);
+  color: var(--primary);
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.tag-remove {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--primary);
+  transition: all var(--duration-fast);
+
+  &:hover {
+    background: var(--primary);
+    color: var(--text-inverse);
+  }
+}
+
+.tag-empty {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.tag-add-row {
+  display: flex;
+  gap: 8px;
+}
+
+.tag-add-input {
+  flex: 1;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text-primary);
+
+  &::placeholder { color: var(--text-tertiary); }
+  &:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+  }
+}
+
+.tag-add-btn {
+  padding: 7px 16px;
+  background: var(--primary);
+  color: var(--text-inverse);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all var(--duration-fast);
+
+  &:hover { background: var(--primary-hover); }
 }
 
 /* 书籍网格 */

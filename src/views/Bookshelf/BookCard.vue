@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { Trash2 } from 'lucide-vue-next'
+import { Trash2, Clock, Tag } from 'lucide-vue-next'
 import type { BookRecord } from '@/types/book'
 
 const props = defineProps<{
@@ -9,6 +9,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'click'): void
   (e: 'delete'): void
+  (e: 'tag', event: MouseEvent): void
 }>()
 
 function formatProgress(p: number): string {
@@ -17,9 +18,22 @@ function formatProgress(p: number): string {
   return `${p}%`
 }
 
+function formatReadingTime(seconds: number): string {
+  if (!seconds || seconds < 60) return ''
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  if (hours > 0) return `${hours}h${minutes > 0 ? minutes + 'm' : ''}`
+  return `${minutes}m`
+}
+
 function handleDelete(e: MouseEvent): void {
   e.stopPropagation()
   emit('delete')
+}
+
+function handleTag(e: MouseEvent): void {
+  e.stopPropagation()
+  emit('tag', e)
 }
 </script>
 
@@ -34,9 +48,18 @@ function handleDelete(e: MouseEvent): void {
 
       <!-- 悬浮操作层 -->
       <div class="cover-overlay">
-        <button class="delete-btn" title="从书架移除" @click="handleDelete">
-          <Trash2 :size="16" />
+        <button class="overlay-btn" title="编辑标签" @click="handleTag">
+          <Tag :size="14" />
         </button>
+        <button class="overlay-btn delete" title="从书架移除" @click="handleDelete">
+          <Trash2 :size="14" />
+        </button>
+      </div>
+
+      <!-- 阅读时长标签 -->
+      <div v-if="book.readingTime >= 60" class="reading-time-badge">
+        <Clock :size="10" />
+        <span>{{ formatReadingTime(book.readingTime) }}</span>
       </div>
 
       <!-- 进度条 -->
@@ -130,17 +153,19 @@ function handleDelete(e: MouseEvent): void {
 .cover-overlay {
   position: absolute;
   inset: 0;
+  z-index: 4;
   background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, transparent 40%, transparent 100%);
   opacity: 0;
   transition: opacity var(--duration-normal) var(--ease-out);
   display: flex;
   justify-content: flex-end;
+  gap: 4px;
   padding: 8px;
 }
 
-.delete-btn {
-  width: 30px;
-  height: 30px;
+.overlay-btn {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(8px);
@@ -151,9 +176,32 @@ function handleDelete(e: MouseEvent): void {
   transition: all var(--duration-fast);
 
   &:hover {
-    background: rgba(220, 60, 60, 0.85);
+    background: rgba(255, 255, 255, 0.25);
     transform: scale(1.1);
   }
+
+  &.delete:hover {
+    background: rgba(220, 60, 60, 0.85);
+  }
+}
+
+.reading-time-badge {
+  position: absolute;
+  bottom: 8px;
+  left: 6px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  border-radius: 100px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+  pointer-events: none;
 }
 
 .progress-bar {
@@ -162,6 +210,7 @@ function handleDelete(e: MouseEvent): void {
   left: 0;
   right: 0;
   height: 3px;
+  z-index: 2;
   background: rgba(0, 0, 0, 0.15);
 }
 

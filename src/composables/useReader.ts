@@ -1,6 +1,7 @@
 /** 阅读器交互逻辑 composable */
 import { ref, onUnmounted } from 'vue'
 import type { FootnoteData } from '@/core/duokan/FootnoteHandler'
+import type { ChapterBackground } from '@/core/renderer/ContentRenderer'
 import { useReaderStore } from '@/stores/reader'
 import { useEpub } from './useEpub'
 
@@ -12,6 +13,8 @@ export function useReader() {
   const containerRef = ref<HTMLDivElement | null>(null)
   const footnoteData = ref<FootnoteData | null>(null)
   const showFootnote = ref(false)
+  /** 当前章节的背景图信息（从 EPUB 中提取，由 Reader 组件渲染到外层） */
+  const chapterBackground = ref<ChapterBackground>({ image: null, size: 'cover', position: 'center', repeat: 'no-repeat' })
 
   let footnoteCleanup: (() => void) | null = null
   let progressTimer: ReturnType<typeof setInterval> | null = null
@@ -46,9 +49,11 @@ export function useReader() {
 
       // 使用 iframe 的实际尺寸（已被外层 padding 缩小）
       const iframeRect = iframeRef.value!.getBoundingClientRect()
-      const totalPages = await epub.renderChapter(
+      const { totalPages, background } = await epub.renderChapter(
         iframeRef.value!, chapter, iframeRect.width, iframeRect.height,
       )
+
+      chapterBackground.value = background
 
       readerStore.updatePagination({
         spineIndex,
@@ -163,7 +168,7 @@ export function useReader() {
     }
   }
 
-  /** 窗口大小变化时重新渲染 */
+  /** 窗口大小变化时重新分页（轻量级，不重写 iframe） */
   async function handleResize(): Promise<void> {
     if (!readerStore.currentChapter || !iframeRef.value || !containerRef.value) return
     if (navigating) return
@@ -173,16 +178,18 @@ export function useReader() {
       const currentPage = readerStore.pagination.currentPage
       const iframeRect = iframeRef.value!.getBoundingClientRect()
 
-      const totalPages = await epub.renderChapter(
+      const result = epub.repaginate(
         iframeRef.value!,
-        readerStore.currentChapter,
         iframeRect.width,
         iframeRect.height,
       )
 
-      const newPage = Math.min(currentPage, totalPages - 1)
-      epub.paginator.goToPage(newPage)
-      readerStore.updatePagination({ currentPage: newPage, totalPages })
+      if (result) {
+        chapterBackground.value = result.background
+        const newPage = Math.min(currentPage, result.totalPages - 1)
+        epub.paginator.goToPage(newPage)
+        readerStore.updatePagination({ currentPage: newPage, totalPages: result.totalPages })
+      }
     } finally {
       navigating = false
     }
@@ -232,6 +239,7 @@ export function useReader() {
     containerRef,
     footnoteData,
     showFootnote,
+    chapterBackground,
     openBook,
     goToChapter,
     nextPage,

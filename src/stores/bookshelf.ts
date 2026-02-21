@@ -10,10 +10,25 @@ export const useBookshelfStore = defineStore('bookshelf', () => {
   const books = ref<BookRecord[]>([])
   const sortBy = ref<'lastRead' | 'title' | 'addedTime'>('lastRead')
   const viewMode = ref<'grid' | 'list'>('grid')
+  /** 当前筛选的标签（空字符串表示全部） */
+  const filterTag = ref('')
 
-  /** 排序后的书籍列表 */
+  /** 所有已使用的标签 */
+  const allTags = computed(() => {
+    const tagSet = new Set<string>()
+    books.value.forEach(b => b.tags?.forEach(t => tagSet.add(t)))
+    return Array.from(tagSet).sort((a, b) => a.localeCompare(b, 'zh'))
+  })
+
+  /** 排序 + 筛选后的书籍列表 */
   const sortedBooks = computed(() => {
-    const list = [...books.value]
+    let list = [...books.value]
+
+    // 标签筛选
+    if (filterTag.value) {
+      list = list.filter(b => b.tags?.includes(filterTag.value))
+    }
+
     switch (sortBy.value) {
       case 'lastRead':
         return list.sort((a, b) => b.lastReadTime - a.lastReadTime)
@@ -79,6 +94,15 @@ export const useBookshelfStore = defineStore('bookshelf', () => {
     storage.set(`progress_${id}`, progress)
   }
 
+  /** 累加阅读时长 */
+  function addReadingTime(id: string, seconds: number): void {
+    const book = books.value.find((b) => b.id === id)
+    if (book) {
+      book.readingTime = (book.readingTime || 0) + seconds
+      saveBooks()
+    }
+  }
+
   /** 获取阅读进度 */
   function getProgress(id: string): ReadingProgress | null {
     return storage.get<ReadingProgress | null>(`progress_${id}`, null)
@@ -89,16 +113,44 @@ export const useBookshelfStore = defineStore('bookshelf', () => {
     return books.value.find((b) => b.id === id)
   }
 
+  /** 给书籍添加标签 */
+  function addTag(bookId: string, tag: string): void {
+    const book = books.value.find(b => b.id === bookId)
+    if (!book) return
+    if (!book.tags) book.tags = []
+    const trimmed = tag.trim()
+    if (trimmed && !book.tags.includes(trimmed)) {
+      book.tags.push(trimmed)
+      saveBooks()
+    }
+  }
+
+  /** 移除书籍标签 */
+  function removeTag(bookId: string, tag: string): void {
+    const book = books.value.find(b => b.id === bookId)
+    if (!book?.tags) return
+    const idx = book.tags.indexOf(tag)
+    if (idx >= 0) {
+      book.tags.splice(idx, 1)
+      saveBooks()
+    }
+  }
+
   return {
     books,
     sortBy,
     viewMode,
+    filterTag,
     sortedBooks,
+    allTags,
     loadBooks,
     addBook,
     removeBook,
     updateProgress,
+    addReadingTime,
     getProgress,
     getBook,
+    addTag,
+    removeTag,
   }
 })

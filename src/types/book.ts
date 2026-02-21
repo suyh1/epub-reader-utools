@@ -11,6 +11,10 @@ export interface BookRecord {
   addedTime: number
   lastReadTime: number
   progress: ReadingProgress
+  /** 累计阅读时长（秒） */
+  readingTime: number
+  /** 用户标签 */
+  tags?: string[]
 }
 
 export interface ReadingProgress {
@@ -21,6 +25,21 @@ export interface ReadingProgress {
   percentage: number
   /** 最后阅读时间戳 */
   timestamp: number
+}
+
+/** 书签 */
+export interface Bookmark {
+  id: string
+  /** spine 索引 */
+  spineIndex: number
+  /** 章节内页码 */
+  pageInChapter: number
+  /** 章节标题 */
+  chapterTitle: string
+  /** 创建时间 */
+  createdAt: number
+  /** 全书进度百分比 */
+  percentage: number
 }
 
 export interface BookshelfState {

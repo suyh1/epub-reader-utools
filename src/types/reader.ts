@@ -13,9 +13,11 @@ export interface ReaderSettings {
   pageAnimation: 'slide' | 'none'
   /** 分栏数：1 = 单栏，2 = 双栏 */
   columns: 1 | 2
+  /** 跟随系统深色模式 */
+  autoTheme: boolean
 }
 
-export type ThemeKey = 'light' | 'sepia' | 'dark' | 'green'
+export type ThemeKey = 'light' | 'sepia' | 'dark' | 'green' | 'ink' | 'dusk'
 
 export interface ThemeColors {
   name: string
@@ -49,6 +51,18 @@ export const THEMES: Record<ThemeKey, ThemeColors> = {
     color: '#2D4A2D',
     selectionBg: '#A5D6A7',
   },
+  ink: {
+    name: '墨韵',
+    background: '#1B2838',
+    color: '#C4CDD9',
+    selectionBg: '#2E4A62',
+  },
+  dusk: {
+    name: '薄暮',
+    background: '#2D2028',
+    color: '#D4B8C4',
+    selectionBg: '#4A3040',
+  },
 }
 
 export const DEFAULT_SETTINGS: ReaderSettings = {
@@ -60,4 +74,5 @@ export const DEFAULT_SETTINGS: ReaderSettings = {
   pageMode: 'paginated',
   pageAnimation: 'slide',
   columns: 1,
+  autoTheme: false,
 }

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { Minus, Plus, X, Type, Columns2, Columns3, BookOpen, Monitor } from 'lucide-vue-next'
+import { Minus, Plus, X, Type, Columns2, Columns3, BookOpen, Monitor, Moon } from 'lucide-vue-next'
 import { useReaderStore } from '@/stores/reader'
 import { THEMES, type ThemeKey } from '@/types/reader'
 
@@ -31,11 +31,42 @@ function updateLineHeight(delta: number): void {
 }
 
 function setTheme(theme: ThemeKey): void {
-  readerStore.updateSettings({ theme })
+  readerStore.updateSettings({ theme, autoTheme: false })
 }
 
 function setFont(fontFamily: string): void {
   readerStore.updateSettings({ fontFamily })
+}
+
+function toggleAutoTheme(): void {
+  readerStore.updateSettings({ autoTheme: !settings.autoTheme })
+}
+
+const paddingPresets = [
+  { label: '紧凑', value: { top: 20, right: 20, bottom: 20, left: 20 } },
+  { label: '适中', value: { top: 40, right: 36, bottom: 40, left: 36 } },
+  { label: '宽松', value: { top: 56, right: 52, bottom: 56, left: 52 } },
+  { label: '超宽', value: { top: 72, right: 72, bottom: 72, left: 72 } },
+]
+
+function getCurrentPaddingLabel(): string {
+  const p = settings.padding
+  const match = paddingPresets.find(
+    preset => preset.value.top === p.top && preset.value.right === p.right
+      && preset.value.bottom === p.bottom && preset.value.left === p.left
+  )
+  return match?.label || '自定义'
+}
+
+function updatePadding(key: 'top' | 'right' | 'bottom' | 'left', delta: number): void {
+  const newVal = Math.max(0, Math.min(120, settings.padding[key] + delta))
+  readerStore.updateSettings({
+    padding: { ...settings.padding, [key]: newVal },
+  })
+}
+
+function setPaddingPreset(preset: typeof paddingPresets[0]): void {
+  readerStore.updateSettings({ padding: { ...preset.value } })
 }
 
 function handleOverlayClick(e: MouseEvent): void {
@@ -48,8 +79,14 @@ function handleOverlayClick(e: MouseEvent): void {
 <template>
   <div class="settings-overlay" @click="handleOverlayClick">
     <div class="settings-panel">
-      <div class="panel-handle" />
+      <div class="panel-header">
+        <div class="panel-handle" />
+        <button class="panel-close" @click="emit('close')">
+          <X :size="16" />
+        </button>
+      </div>
 
+      <div class="settings-body">
       <!-- 字号 -->
       <div class="setting-row">
         <span class="setting-label">字号</span>
@@ -96,7 +133,18 @@ function handleOverlayClick(e: MouseEvent): void {
 
       <!-- 主题 -->
       <div class="setting-row vertical">
-        <span class="setting-label">主题</span>
+        <div class="setting-label-row">
+          <span class="setting-label">主题</span>
+          <button
+            class="auto-theme-btn"
+            :class="{ active: settings.autoTheme }"
+            @click="toggleAutoTheme"
+            title="跟随系统深色模式"
+          >
+            <Moon :size="13" />
+            <span>自动</span>
+          </button>
+        </div>
         <div class="theme-group">
           <button
             v-for="key in themeKeys"
@@ -156,6 +204,49 @@ function handleOverlayClick(e: MouseEvent): void {
           </div>
         </div>
       </div>
+
+      <!-- 页边距 -->
+      <div class="setting-row vertical">
+        <span class="setting-label">页边距</span>
+        <div class="chip-group">
+          <button
+            v-for="preset in paddingPresets"
+            :key="preset.label"
+            class="chip"
+            :class="{ active: getCurrentPaddingLabel() === preset.label }"
+            @click="setPaddingPreset(preset)"
+          >
+            {{ preset.label }}
+          </button>
+        </div>
+        <div class="padding-fine-tune">
+          <div class="padding-item">
+            <span class="padding-label">上下</span>
+            <div class="stepper mini">
+              <button class="stepper-btn" @click="updatePadding('top', -4); updatePadding('bottom', -4)" :disabled="settings.padding.top <= 0">
+                <Minus :size="12" />
+              </button>
+              <span class="stepper-value">{{ settings.padding.top }}</span>
+              <button class="stepper-btn" @click="updatePadding('top', 4); updatePadding('bottom', 4)" :disabled="settings.padding.top >= 120">
+                <Plus :size="12" />
+              </button>
+            </div>
+          </div>
+          <div class="padding-item">
+            <span class="padding-label">左右</span>
+            <div class="stepper mini">
+              <button class="stepper-btn" @click="updatePadding('left', -4); updatePadding('right', -4)" :disabled="settings.padding.left <= 0">
+                <Minus :size="12" />
+              </button>
+              <span class="stepper-value">{{ settings.padding.left }}</span>
+              <button class="stepper-btn" @click="updatePadding('left', 4); updatePadding('right', 4)" :disabled="settings.padding.left >= 120">
+                <Plus :size="12" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div><!-- settings-body -->
     </div>
   </div>
 </template>
@@ -179,11 +270,15 @@ function handleOverlayClick(e: MouseEvent): void {
 
 .settings-panel {
   width: 100%;
+  max-height: 85vh;
   background: var(--bg-elevated);
   border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   padding: 8px 24px 24px;
   animation: panelSlideUp var(--duration-slow) var(--ease-out);
   box-shadow: var(--shadow-xl);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 @keyframes panelSlideUp {
@@ -191,12 +286,45 @@ function handleOverlayClick(e: MouseEvent): void {
   to { transform: translateY(0); }
 }
 
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 4px 0 12px;
+  flex-shrink: 0;
+}
+
 .panel-handle {
   width: 36px;
   height: 4px;
   border-radius: 2px;
   background: var(--border);
-  margin: 4px auto 16px;
+}
+
+.panel-close {
+  position: absolute;
+  right: -4px;
+  top: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--duration-fast);
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+}
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .setting-row {
@@ -222,6 +350,36 @@ function handleOverlayClick(e: MouseEvent): void {
   color: var(--text-secondary);
   flex-shrink: 0;
   font-weight: 500;
+}
+
+.setting-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.auto-theme-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 100px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  border: 1px solid var(--border);
+  transition: all var(--duration-fast);
+
+  &:hover {
+    border-color: var(--border-hover);
+    color: var(--text-secondary);
+  }
+
+  &.active {
+    background: var(--primary);
+    color: var(--text-inverse);
+    border-color: var(--primary);
+  }
 }
 
 .setting-control {
@@ -307,18 +465,20 @@ function handleOverlayClick(e: MouseEvent): void {
 /* 主题色块 */
 .theme-group {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
+  flex-wrap: wrap;
 }
 
 .theme-swatch {
   flex: 1;
-  height: 44px;
+  min-width: calc(33.33% - 8px);
+  height: 40px;
   border-radius: var(--radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
   position: relative;
   border: 2px solid transparent;
@@ -384,6 +544,41 @@ function handleOverlayClick(e: MouseEvent): void {
     background: var(--primary);
     color: var(--text-inverse);
     font-weight: 500;
+  }
+}
+
+/* 页边距微调 */
+.padding-fine-tune {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+
+.padding-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.padding-label {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  min-width: 28px;
+}
+
+.stepper.mini {
+  .stepper-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .stepper-value {
+    font-size: 12px;
+    min-width: 36px;
+    height: 28px;
+    line-height: 28px;
   }
 }
 </style>

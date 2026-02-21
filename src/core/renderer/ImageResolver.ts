@@ -68,6 +68,37 @@ export class ImageResolver {
     return this.blobUrls
   }
 
+  /** 预加载 CSS 中引用的背景图片 */
+  async preloadCssImages(cssTexts: string[], cssHrefs: string[]): Promise<void> {
+    for (let i = 0; i < cssTexts.length; i++) {
+      const cssText = cssTexts[i]
+      const cssHref = cssHrefs[i] || ''
+      const hrefs = this.extractCssImageHrefs(cssText, cssHref)
+      for (const href of hrefs) {
+        if (this.blobUrls.has(href)) continue
+        try {
+          await this.loadImage(href)
+        } catch (e) {
+          console.warn(`Failed to load CSS image: ${href}`, e)
+        }
+      }
+    }
+  }
+
+  /** 从 CSS 文本中提取 url() 引用的图片路径 */
+  private extractCssImageHrefs(css: string, cssHref: string): string[] {
+    const hrefs: Set<string> = new Set()
+    const urlRegex = /url\(\s*["']?([^"')]+\.(?:jpg|jpeg|png|gif|svg|webp))["']?\s*\)/gi
+    let match: RegExpExecArray | null
+    while ((match = urlRegex.exec(css)) !== null) {
+      const src = match[1]
+      if (!src.startsWith('data:') && !src.startsWith('blob:') && !src.startsWith('http')) {
+        hrefs.add(resolveHref(cssHref, src))
+      }
+    }
+    return Array.from(hrefs)
+  }
+
   /** 释放所有 Blob URL */
   destroy(): void {
     this.blobUrls.forEach((url) => revokeBlobUrl(url))
