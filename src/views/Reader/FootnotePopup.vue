@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { X } from 'lucide-vue-next'
 import type { FootnoteData } from '@/core/duokan/FootnoteHandler'
 
 defineProps<{
@@ -19,9 +20,12 @@ function handleOverlayClick(e: MouseEvent): void {
 <template>
   <div class="footnote-overlay" @click="handleOverlayClick">
     <div class="footnote-popup">
+      <div class="popup-handle" />
       <header class="footnote-header">
         <span class="footnote-label">注释</span>
-        <button class="footnote-close" @click="emit('close')">✕</button>
+        <button class="footnote-close" @click="emit('close')">
+          <X :size="16" />
+        </button>
       </header>
       <div class="footnote-content" v-html="data.content" />
     </div>
@@ -33,21 +37,27 @@ function handleOverlayClick(e: MouseEvent): void {
   position: absolute;
   inset: 0;
   z-index: 70;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay);
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  animation: fadeIn var(--duration-fast) var(--ease-out);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .footnote-popup {
   width: 100%;
   max-height: 50%;
-  background: #fff;
-  border-radius: 12px 12px 0 0;
+  background: var(--bg-elevated);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
   display: flex;
   flex-direction: column;
-  animation: slideUp 0.25s ease;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+  animation: slideUp var(--duration-slow) var(--ease-out);
+  box-shadow: var(--shadow-xl);
 }
 
 @keyframes slideUp {
@@ -55,48 +65,64 @@ function handleOverlayClick(e: MouseEvent): void {
   to { transform: translateY(0); }
 }
 
+.popup-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  margin: 8px auto 0;
+  flex-shrink: 0;
+}
+
 .footnote-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 20px;
-  border-bottom: 1px solid #eee;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .footnote-label {
   font-size: 15px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .footnote-close {
-  background: none;
-  border: none;
-  font-size: 16px;
-  color: #999;
-  cursor: pointer;
-  padding: 4px;
-  line-height: 1;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--duration-fast);
 
   &:hover {
-    color: #333;
+    background: var(--bg-hover);
+    color: var(--text-primary);
   }
 }
 
 .footnote-content {
-  padding: 16px 20px;
+  padding: 16px 20px 20px;
   overflow-y: auto;
   font-size: 14px;
   line-height: 1.8;
-  color: #444;
+  color: var(--text-secondary);
 
   :deep(p) {
     margin: 0 0 8px;
   }
 
   :deep(a) {
-    color: #8b7355;
+    color: var(--primary);
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
   }
 }
 </style>

@@ -26,10 +26,8 @@ export function parseOpf(opfXml: string, basePath: string): OpfResult {
     basePath,
   )
 
-  // 设置封面
-  if (!metadata.coverHref) {
-    metadata.coverHref = coverHref || findCoverFromMeta(pkg.metadata || pkg.Metadata || {}, manifest)
-  }
+  // 设置封面：多策略查找
+  metadata.coverHref = resolveCoverHref(metadata.coverHref, coverHref, manifest)
 
   // 解析 spine
   const spine = parseSpine(pkg.spine || pkg.Spine || {}, manifest)
@@ -167,17 +165,52 @@ function parseSpine(spineNode: any, manifest: Map<string, Resource>): SpineItem[
   return spine
 }
 
-/** 从 meta name="cover" 中查找封面图片 href */
-function findCoverFromMeta(meta: any, manifest: Map<string, Resource>): string | undefined {
-  const metas = ensureArray(meta?.meta)
-  for (const m of metas) {
-    if (m?.['@_name'] === 'cover') {
-      const coverId = m['@_content']
-      const resource = manifest.get(coverId)
-      if (resource && resource.mediaType.startsWith('image/')) {
-        return resource.href
+/**
+ * 多策略解析封面图片 href
+ * 1. EPUB 3: manifest 中 properties="cover-image" 的项
+ * 2. EPUB 2: <meta name="cover" content="id"> 指向的 manifest 图片资源
+ * 3. 回退: manifest 中 id/href 包含 "cover" 的图片资源
+ */
+function resolveCoverHref(
+  metaCoverId: string | undefined,
+  manifestCoverHref: string | undefined,
+  manifest: Map<string, Resource>,
+): string | undefined {
+  // 策略 1: EPUB 3 properties="cover-image"（已在 parseManifest 中识别）
+  if (manifestCoverHref) {
+    return manifestCoverHref
+  }
+
+  // 策略 2: <meta name="cover"> 指向的 manifest id
+  if (metaCoverId) {
+    // metaCoverId 可能是 manifest id
+    const resource = manifest.get(metaCoverId)
+    if (resource && resource.mediaType.startsWith('image/')) {
+      return resource.href
+    }
+    // 也可能直接就是 href（少数情况）
+    for (const res of manifest.values()) {
+      if (res.href === metaCoverId && res.mediaType.startsWith('image/')) {
+        return res.href
       }
     }
   }
+
+  // 策略 3: 按 id/href 名称猜测
+  for (const res of manifest.values()) {
+    if (!res.mediaType.startsWith('image/')) continue
+    const idLower = res.id.toLowerCase()
+    const hrefLower = res.href.toLowerCase()
+    if (
+      idLower === 'cover' ||
+      idLower === 'cover-image' ||
+      idLower === 'coverimage' ||
+      idLower.startsWith('cover.') ||
+      hrefLower.includes('cover.')
+    ) {
+      return res.href
+    }
+  }
+
   return undefined
 }

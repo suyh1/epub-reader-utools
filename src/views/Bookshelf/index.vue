@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { ref, computed } from 'vue'
+import { Search, Plus, BookOpen, ArrowDownUp } from 'lucide-vue-next'
 import { useBookshelfStore } from '@/stores/bookshelf'
 import type { BookRecord } from '@/types/book'
 import BookCard from './BookCard.vue'
@@ -34,7 +35,6 @@ function handleImport(): void {
       emit('open-file', files[0])
     }
   } else {
-    // 浏览器环境回退
     const input = document.createElement('input')
     input.type = 'file'
     input.accept = '.epub'
@@ -67,8 +67,16 @@ function handleDelete(id: string): void {
   bookshelfStore.removeBook(id)
 }
 
-function formatProgress(progress: number): string {
-  return progress > 0 ? `${progress}%` : '未读'
+const sortLabels: Record<string, string> = {
+  lastRead: '最近阅读',
+  title: '书名',
+  addedTime: '添加时间',
+}
+
+function cycleSortBy(): void {
+  const keys = ['lastRead', 'title', 'addedTime'] as const
+  const idx = keys.indexOf(bookshelfStore.sortBy)
+  bookshelfStore.sortBy = keys[(idx + 1) % keys.length]
 }
 </script>
 
@@ -80,28 +88,44 @@ function formatProgress(progress: number): string {
     @dragleave="handleDragLeave"
   >
     <!-- 顶部栏 -->
-    <header class="bookshelf-header">
-      <h1 class="bookshelf-title">📚 书架</h1>
-      <div class="bookshelf-actions">
-        <input
-          v-model="searchQuery"
-          class="search-input"
-          type="text"
-          placeholder="搜索书名或作者..."
-        />
-        <select v-model="bookshelfStore.sortBy" class="sort-select">
-          <option value="lastRead">最近阅读</option>
-          <option value="title">书名</option>
-          <option value="addedTime">添加时间</option>
-        </select>
-        <button class="import-btn" @click="handleImport">+ 导入</button>
+    <header class="shelf-header">
+      <div class="shelf-brand">
+        <BookOpen :size="22" stroke-width="1.8" />
+        <h1>书架</h1>
+      </div>
+
+      <div class="shelf-actions">
+        <div class="search-box">
+          <Search :size="15" class="search-icon" />
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="搜索书名或作者"
+            class="search-input"
+          />
+        </div>
+
+        <button class="sort-btn" @click="cycleSortBy" :title="`排序: ${sortLabels[bookshelfStore.sortBy]}`">
+          <ArrowDownUp :size="15" />
+          <span>{{ sortLabels[bookshelfStore.sortBy] }}</span>
+        </button>
+
+        <button class="import-btn" @click="handleImport">
+          <Plus :size="16" stroke-width="2.5" />
+          <span>导入</span>
+        </button>
       </div>
     </header>
 
     <!-- 拖拽提示 -->
-    <div v-if="isDragOver" class="drop-overlay">
-      <div class="drop-hint">📖 松开以导入 EPUB 文件</div>
-    </div>
+    <transition name="fade">
+      <div v-if="isDragOver" class="drop-overlay">
+        <div class="drop-zone">
+          <BookOpen :size="40" stroke-width="1.5" />
+          <span>松开以导入 EPUB 文件</span>
+        </div>
+      </div>
+    </transition>
 
     <!-- 书籍网格 -->
     <div v-if="filteredBooks.length > 0" class="book-grid">
@@ -116,10 +140,15 @@ function formatProgress(progress: number): string {
 
     <!-- 空状态 -->
     <div v-else class="empty-state">
-      <div class="empty-icon">📖</div>
-      <p class="empty-text">书架空空如也</p>
-      <p class="empty-hint">点击"导入"按钮或拖拽 EPUB 文件到此处</p>
-      <button class="import-btn large" @click="handleImport">导入 EPUB</button>
+      <div class="empty-visual">
+        <BookOpen :size="56" stroke-width="1" />
+      </div>
+      <p class="empty-title">书架空空如也</p>
+      <p class="empty-desc">点击导入按钮或拖拽 EPUB 文件到此处</p>
+      <button class="empty-action" @click="handleImport">
+        <Plus :size="18" stroke-width="2.5" />
+        <span>导入 EPUB</span>
+      </button>
     </div>
   </div>
 </template>
@@ -129,130 +158,219 @@ function formatProgress(progress: number): string {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f8f6f1;
+  background: var(--bg);
   position: relative;
   overflow: hidden;
 }
 
-.bookshelf-header {
+/* 顶部栏 */
+.shelf-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  border-bottom: 1px solid #e8e4dc;
-  background: #fff;
+  padding: 14px 24px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  gap: 16px;
 }
 
-.bookshelf-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
-}
-
-.bookshelf-actions {
+.shelf-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  color: var(--primary);
+  flex-shrink: 0;
+
+  h1 {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.3px;
+  }
+}
+
+.shelf-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-tertiary);
+  pointer-events: none;
 }
 
 .search-input {
-  padding: 6px 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  padding: 7px 12px 7px 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   font-size: 13px;
-  width: 180px;
-  outline: none;
-  transition: border-color 0.2s;
+  width: 200px;
+  background: var(--bg);
+  color: var(--text-primary);
+  transition: all var(--duration-fast);
+
+  &::placeholder {
+    color: var(--text-tertiary);
+  }
 
   &:focus {
-    border-color: #8b7355;
+    border-color: var(--primary);
+    background: var(--bg-elevated);
+    box-shadow: 0 0 0 3px var(--primary-light);
   }
 }
 
-.sort-select {
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+.sort-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
-  background: #fff;
-  outline: none;
-  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all var(--duration-fast);
+
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
 }
 
 .import-btn {
-  padding: 6px 16px;
-  background: #8b7355;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  background: var(--primary);
+  color: var(--text-inverse);
+  border-radius: var(--radius-sm);
   font-size: 13px;
-  cursor: pointer;
-  transition: background 0.2s;
-  line-height: 1.5;
+  font-weight: 500;
+  transition: all var(--duration-fast);
 
   &:hover {
-    background: #6d5a43;
+    background: var(--primary-hover);
+    box-shadow: var(--shadow-sm);
   }
 
-  &.large {
-    padding: 10px 28px;
-    font-size: 15px;
+  &:active {
+    transform: scale(0.97);
   }
 }
 
+/* 拖拽 */
 .drop-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(139, 115, 85, 0.15);
+  z-index: 100;
+  background: rgba(247, 245, 242, 0.92);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 100;
-  border: 3px dashed #8b7355;
-  border-radius: 8px;
-  margin: 8px;
+  padding: 32px;
 }
 
-.drop-hint {
-  font-size: 18px;
-  color: #8b7355;
+.drop-zone {
+  width: 100%;
+  height: 100%;
+  border: 2px dashed var(--primary);
+  border-radius: var(--radius-xl);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--primary);
+  font-size: 16px;
   font-weight: 500;
 }
 
+/* 书籍网格 */
 .book-grid {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 28px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 28px 24px;
   align-content: start;
 }
 
+/* 空状态 */
 .empty-state {
   flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  color: #999;
+  padding: 32px;
 }
 
-.empty-icon {
-  font-size: 64px;
-  margin-bottom: 16px;
+.empty-visual {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: var(--primary-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  margin-bottom: 20px;
 }
 
-.empty-text {
-  font-size: 18px;
-  margin: 0 0 8px;
-  color: #666;
+.empty-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
 }
 
-.empty-hint {
+.empty-desc {
   font-size: 13px;
-  margin: 0 0 24px;
+  color: var(--text-tertiary);
+  margin-bottom: 24px;
+}
+
+.empty-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background: var(--primary);
+  color: var(--text-inverse);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 500;
+  transition: all var(--duration-fast);
+
+  &:hover {
+    background: var(--primary-hover);
+    box-shadow: var(--shadow-md);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+/* 过渡 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>

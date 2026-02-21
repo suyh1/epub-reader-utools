@@ -207,16 +207,7 @@ export class EpubParser {
   }
 
   private async resolveCover(): Promise<void> {
-    if (!this.opfResult) return
-    const meta = this.opfResult.metadata
-
-    // coverHref 可能是 manifest id 而非 href
-    if (meta.coverHref && !meta.coverHref.includes('.')) {
-      const resource = this.opfResult.manifest.get(meta.coverHref)
-      if (resource) {
-        meta.coverHref = resource.href
-      }
-    }
+    // 封面解析已在 OpfParser.resolveCoverHref 中完成
   }
 
   /** 从 XHTML 中提取 CSS 引用 */

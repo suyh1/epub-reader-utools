@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { Trash2 } from 'lucide-vue-next'
 import type { BookRecord } from '@/types/book'
 
 const props = defineProps<{
@@ -16,29 +17,40 @@ function formatProgress(p: number): string {
   return `${p}%`
 }
 
-function handleContextMenu(e: MouseEvent): void {
-  e.preventDefault()
-  if (confirm(`确定要从书架移除《${props.book.title}》吗？`)) {
-    emit('delete')
-  }
+function handleDelete(e: MouseEvent): void {
+  e.stopPropagation()
+  emit('delete')
 }
 </script>
 
 <template>
-  <div class="book-card" @click="emit('click')" @contextmenu="handleContextMenu">
+  <div class="book-card" @click="emit('click')">
     <div class="book-cover">
       <img v-if="book.coverBase64" :src="book.coverBase64" :alt="book.title" />
       <div v-else class="cover-placeholder">
         <span class="cover-title">{{ book.title }}</span>
         <span class="cover-author">{{ book.creator }}</span>
       </div>
-      <div class="progress-badge" :class="{ unread: book.progress.percentage <= 0 }">
-        {{ formatProgress(book.progress.percentage) }}
+
+      <!-- 悬浮操作层 -->
+      <div class="cover-overlay">
+        <button class="delete-btn" title="从书架移除" @click="handleDelete">
+          <Trash2 :size="16" />
+        </button>
+      </div>
+
+      <!-- 进度条 -->
+      <div class="progress-bar">
+        <div
+          class="progress-fill"
+          :style="{ width: `${Math.max(book.progress.percentage, 0)}%` }"
+        />
       </div>
     </div>
-    <div class="book-info">
+
+    <div class="book-meta">
       <div class="book-title" :title="book.title">{{ book.title }}</div>
-      <div class="book-author" :title="book.creator">{{ book.creator }}</div>
+      <div class="book-author" :title="book.creator">{{ book.creator || '未知作者' }}</div>
     </div>
   </div>
 </template>
@@ -46,14 +58,23 @@ function handleContextMenu(e: MouseEvent): void {
 <style lang="less" scoped>
 .book-card {
   cursor: pointer;
-  transition: transform 0.2s;
+  transition: transform var(--duration-normal) var(--ease-out);
+  position: relative;
 
   &:hover {
-    transform: translateY(-4px);
+    transform: translateY(-6px);
+
+    .cover-overlay {
+      opacity: 1;
+    }
+
+    .book-cover {
+      box-shadow: var(--shadow-lg);
+    }
   }
 
   &:active {
-    transform: translateY(-2px);
+    transform: translateY(-3px);
   }
 }
 
@@ -61,15 +82,17 @@ function handleContextMenu(e: MouseEvent): void {
   position: relative;
   width: 100%;
   aspect-ratio: 3 / 4;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15), 2px 0 4px rgba(0, 0, 0, 0.1);
-  background: #e8e4dc;
+  box-shadow: var(--shadow-md);
+  background: #E8E4DC;
+  transition: box-shadow var(--duration-normal) var(--ease-out);
 
   img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
   }
 }
 
@@ -80,59 +103,92 @@ function handleContextMenu(e: MouseEvent): void {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 12px;
-  background: linear-gradient(135deg, #8b7355 0%, #a08b6d 100%);
+  padding: 16px;
+  background: linear-gradient(145deg, #6B5344 0%, #8B7355 50%, #A08B6D 100%);
   color: #fff;
   text-align: center;
   gap: 8px;
 }
 
 .cover-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  line-height: 1.3;
+  line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  letter-spacing: 0.5px;
 }
 
 .cover-author {
   font-size: 11px;
-  opacity: 0.8;
+  opacity: 0.75;
+  letter-spacing: 0.3px;
 }
 
-.progress-badge {
+.cover-overlay {
   position: absolute;
-  bottom: 6px;
-  right: 6px;
-  padding: 2px 6px;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  font-size: 10px;
-  border-radius: 3px;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, transparent 40%, transparent 100%);
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-out);
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px;
+}
 
-  &.unread {
-    background: rgba(139, 115, 85, 0.8);
+.delete-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--duration-fast);
+
+  &:hover {
+    background: rgba(220, 60, 60, 0.85);
+    transform: scale(1.1);
   }
 }
 
-.book-info {
-  padding: 8px 2px 0;
+.progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.progress-fill {
+  height: 100%;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 0 2px 2px 0;
+  transition: width var(--duration-slow) var(--ease-out);
+}
+
+.book-meta {
+  padding: 10px 2px 0;
 }
 
 .book-title {
   font-size: 13px;
-  font-weight: 500;
-  color: #333;
+  font-weight: 600;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: 1.4;
 }
 
 .book-author {
   font-size: 11px;
-  color: #999;
+  color: var(--text-tertiary);
   margin-top: 2px;
   white-space: nowrap;
   overflow: hidden;
